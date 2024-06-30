@@ -71,7 +71,7 @@ def update_timers():
         if timeLeft[i] < 0:
             state[i] = (state[i]+1)% 3
             timeLeft[i] = timeLeft_max[i][state[i]]
-def main():
+def controlTrafficLight():
     #setup()
     try:
         while True:
@@ -83,4 +83,4 @@ def main():
         pass
 
 if __name__ == "__main__":
-    main()
+    controlTrafficLight()

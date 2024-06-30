@@ -75,7 +75,7 @@ def scan_ble_devices():
     devices = scanner.scan(0.5)
     addr_scanned_devices = [dev.addr for dev in devices]
 
-if __name__ == "__main__":
+def readNotify():
     addr_select_devices = []
     while True:
         print(f"Stop Device For Scanning")
@@ -98,4 +98,5 @@ if __name__ == "__main__":
         time.sleep(30)
         
 
-
+if __name__ == "__main__":
+    readNotify()

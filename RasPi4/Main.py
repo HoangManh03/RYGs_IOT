@@ -12,6 +12,7 @@ import os
 polygon_path = "polygon.json"
 weights_path = 'custom3.pt'
 
+
 objects = ["xe may", "oto", "xe bus", "xe tai"]  #################################### OBJECT NAME ########################
 
 multiplexer = {
@@ -107,7 +108,7 @@ def run(cam_index_list, image_points_array, stop_line_real_array, H_array):
                 cv2.destroyAllWindows()  
                 break
 
-def main():
+def detect():
     global polygon_path
     current_dir = os.path.dirname(os.path.abspath(__file__))
     polygon_path = os.path.join(current_dir, 'data' ,polygon_path)
@@ -144,4 +145,4 @@ def main():
     run(cam_index_list, image_points_array, stop_line_real_array, H_array)
 
 if __name__ == "__main__":
-    main()
+    detect()
