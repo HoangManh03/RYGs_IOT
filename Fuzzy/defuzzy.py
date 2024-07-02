@@ -104,7 +104,15 @@ for i in xpoints:
 
     output.append(a)
 
-
+def deFuzzy(NumberOfVehicles, Queue):
+    cmd_output.input['NumberOfVehicles'] = NumberOfVehicles
+    cmd_output.input['Queue'] = Queue
+    cmd_output.compute()
+    result = cmd_output.output['Duration']
+    print(NumberOfVehicles)
+    print(Queue)
+    print(result)
+    return result
 # Print output command and plots
 print("Output: ")
 
