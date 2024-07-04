@@ -41,11 +41,11 @@ BCD = [0b11111100,0b01100000,0b11011010,0b11110010,0b01100110,0b10110110,0b10111
 LIGHT = [[0b00010001, 0b00010010, 0b00010100], [0b00100001, 0b00100010, 0b00100100],[0b01000001, 0b01000010, 0b01000100]]
 ############################# Control light variable ##############################
 g_timeLeft_max = [#thoi gian max cac den
-    [10,3,12+3+3+3],
-    [12,3,10+3+3+3],
-    [10,3,12+3+3+3],
-    [12,3,10+3+3+3]]
-g_defuzzy_timeLeft_max=[10,10,10,10]# thoi gian max cac den Xanh theo defuzzy
+    [10,3,15+3+3+3],
+    [15,3,10+3+3+3],
+    [10,3,15+3+3+3],
+    [15,3,10+3+3+3]]
+g_defuzzy_timeLeft_max=[20,20,20,20]# thoi gian max cac den Xanh theo defuzzy
 state = [0, 2, 0, 2]# trang thai bat dau cac den
 timeLeft = [g_timeLeft_max[0][0],g_timeLeft_max[1][2]-3,g_timeLeft_max[2][0],g_timeLeft_max[3][2]-3]# thoi gian con lai cua cac den 
 ############################# defuzzy_timeleft function #############################
@@ -53,13 +53,16 @@ def reset_defuzzy_timeleft_max():
     global g_defuzzy_timeLeft_max
     g_defuzzy_timeLeft_max=[10,10,10,10]
 
-def update_defuzzy_timeLeft_max(defuzzy_timeLeft_max_i, i):
-    global g_defuzzy_timeLeft_max
-    g_defuzzy_timeLeft_max[i] = max(defuzzy_timeLeft_max_i , g_defuzzy_timeLeft_max[(i+2)%4])
-    g_timeLeft_max[i][0]=g_defuzzy_timeLeft_max[i]
-    g_timeLeft_max[(i+2)%4][0]=g_defuzzy_timeLeft_max[i]
-    g_timeLeft_max[(i+1)%4][2]=g_defuzzy_timeLeft_max[i]+3+3+3
-    g_timeLeft_max[(i+3)%4][2]=g_defuzzy_timeLeft_max[i]+3+3+3
+def update_timeLeft_max():
+    global g_timeLeft_max,g_defuzzy_timeLeft_max
+    for i in range(2):
+        g_defuzzy_timeLeft_max[i] =  max(g_defuzzy_timeLeft_max[i],g_defuzzy_timeLeft_max[i+2])
+        g_defuzzy_timeLeft_max[i] =  max(g_defuzzy_timeLeft_max[i],g_defuzzy_timeLeft_max[i+2])
+    g_timeLeft_max = [#thoi gian max cac den
+    [g_defuzzy_timeLeft_max[0],3,g_defuzzy_timeLeft_max[1]+3+3+3],
+    [g_defuzzy_timeLeft_max[1],3,g_defuzzy_timeLeft_max[0]+3+3+3],
+    [g_defuzzy_timeLeft_max[0],3,g_defuzzy_timeLeft_max[1]+3+3+3],
+    [g_defuzzy_timeLeft_max[1],3,g_defuzzy_timeLeft_max[0]+3+3+3]]
 ############################# Detect and defuzzy function #############################
 def convert_to_real_world_coordinates(point, H):
     point = np.array([point[0], point[1], 1.0], dtype="float64")
@@ -82,7 +85,7 @@ def run(cam_index_list, image_points_array, stop_line_real_array, H_array):
     ###Change parameter in Here ####
     global objects
     global weights_path
-    global g_timeLeft_max
+    global g_timeLeft_max,g_defuzzy_timeLeft_max
     global current_dir 
     weights_path = os.path.join(current_dir, 'data' ,weights_path)
     number_of_objects = {}
@@ -132,7 +135,7 @@ def run(cam_index_list, image_points_array, stop_line_real_array, H_array):
             print(print_number_objects)
             number_vehicle/=5
             timeleft = round(deFuzzy.deFuzzy(number_vehicle, max_distance))
-            update_defuzzy_timeLeft_max(timeleft,i)
+            g_defuzzy_timeLeft_max[i] = timeleft
             #print(f"Queue:{max_distance:.1f}m")  #print(f"Number:{number_vehicle}")  #print(f"Duration:{timeleft} s")
             cv2.putText(frame, f"Queue:{max_distance:.1f}m", (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
             cv2.putText(frame, f"Number:{number_vehicle}", (10,60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
@@ -201,7 +204,7 @@ def update_display():
     shift_out(LIGHT[state[3]][state[2]],GPIO_PIN[2])
     shift_out(LIGHT[state[1]][state[0]],GPIO_PIN[2])
     for i in range(2):
-        for j in range(2):
+        for j in reversed(range(2)):
             tens = timeLeft[i*2+j] // 10
             units = timeLeft[i*2+j] % 10
             shift_out(~BCD[units],GPIO_PIN[i])
@@ -215,8 +218,8 @@ def update_timers():
         if timeLeft[i] < 0:
             state[i] = (state[i]+1)% 3
             timeLeft[i] = g_timeLeft_max[i][state[i]]
-            if(state[i] == 2):
-                reset_defuzzy_timeleft_max()
+            if(state[i] == 0 and i >= 2):
+                update_timeLeft_max()
 
 def controlTrafficLight():
     global check_stop_program
@@ -225,7 +228,7 @@ def controlTrafficLight():
         while check_stop_program == False:
             update_display()
             update_timers()
-            time.sleep(1)
+            time.sleep(0.2)
     except KeyboardInterrupt:
         GPIO.cleanup()
         check_stop_program = True
