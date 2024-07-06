@@ -8,9 +8,17 @@ from ultralytics.utils.files import increment_path
 from ultralytics.utils.plotting import Annotator, colors
 import json
 import os
+import sys
 
 polygon_path = "polygon.json"
-weights_path = 'custom3.pt'
+weights_path = 'saban.pt'
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+module_dir = os.path.join(current_dir, 'modules')
+if module_dir not in sys.path:
+    sys.path.append(module_dir)
+    
+import deFuzzy
 
 objects = ["xe may", "oto", "xe bus", "xe tai"]  #################################### OBJECT NAME ########################
 
@@ -88,15 +96,16 @@ def run(cam_index_list, image_points_array, stop_line_real_array, H_array):
             
             print_number_objects = ""
             number_vehicle = 0
-            countdown_time = 0
             
             for object in objects:
                 print_number_objects += f"  - {object}:{number_of_objects[object]}"
                 number_vehicle+= number_of_objects[object]*multiplexer[object]
-            print(print_number_objects)
+                
+            timeleft = round(deFuzzy.deFuzzy(number_vehicle, max_distance))
+            
             print(f"Queue:{max_distance:.1f} m")
             print(f"Number:{number_vehicle}")
-            print(f"Time:{countdown_time}s")
+            print(f"Duration:{timeleft} s")
             
             frame = cv2.resize(frame, (640, 480))
             cv2.imshow(f"Webcam {i}",frame)
@@ -107,7 +116,7 @@ def run(cam_index_list, image_points_array, stop_line_real_array, H_array):
                 cv2.destroyAllWindows()  
                 break
 
-def main():
+def detect():
     global polygon_path
     current_dir = os.path.dirname(os.path.abspath(__file__))
     polygon_path = os.path.join(current_dir, 'data' ,polygon_path)
@@ -144,4 +153,4 @@ def main():
     run(cam_index_list, image_points_array, stop_line_real_array, H_array)
 
 if __name__ == "__main__":
-    main()
+    detect()
