@@ -2,11 +2,11 @@ import numpy as np
 import skfuzzy as fuzz
 from skfuzzy import control as ctrl
 import matplotlib.pyplot as plt
-import defuzzy
+import deFuzzy_test
 
-NumberOfVehicles_value = defuzzy.NumberOfVehicles_value
-Queue_value = defuzzy.Queue_value
-output = defuzzy.output
+NumberOfVehicles_value = deFuzzy_test.NumberOfVehicles_value
+Queue_value = deFuzzy_test.Queue_value
+output = deFuzzy_test.output
 temp = 0
 
 plt.figure(figsize=(8, 8))
