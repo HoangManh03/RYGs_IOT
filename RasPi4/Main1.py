@@ -11,7 +11,8 @@ import os
 import sys
 import threading
 import time
-
+from bluepy import btle
+from bluepy.btle import Scanner, DefaultDelegate
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 module_dir = os.path.join(current_dir, 'modules')
@@ -28,7 +29,16 @@ multiplexer = {
     "xe bus": 10,
     "xe tai": 10,
 }
-############################# Detect and defuzzy variable #############################
+############################# BLE variable #############################
+ble_devices_path = r'ble_devices.json'
+current_dir = os.path.dirname(os.path.abspath(__file__))
+ble_devices_path = os.path.join(current_dir , 'data' , ble_devices_path)
+addr_devices_in_processes = []
+addr_select_devices = []
+addr_scanned_devices = []
+stop_BLEDeviceThread = True
+data_int = None
+############################# Control light constant variable ##############################
 check_stop_program = False
 ############################# Control light constant variable ##############################
 GPIO_PIN = [
@@ -40,29 +50,16 @@ BCD = [0b11111100,0b01100000,0b11011010,0b11110010,0b01100110,0b10110110,0b10111
 # Xanh Xanh, Xanh Vang, Xanh Do # Vang Xanh, Vang Vang, Vang Do # Do Xanh,   Do Vang,   Do Do
 LIGHT = [[0b00010001, 0b00010010, 0b00010100], [0b00100001, 0b00100010, 0b00100100],[0b01000001, 0b01000010, 0b01000100]]
 ############################# Control light variable ##############################
+yellow_time_left = 3
 g_timeLeft_max = [#thoi gian max cac den
-    [10,3,15+4],
-    [15,3,10+4],
-    [10,3,15+4],
-    [15,3,10+4]]
+    [10,yellow_time_left,15+yellow_time_left+1],
+    [15,yellow_time_left,10+yellow_time_left+1],
+    [10,yellow_time_left,15+yellow_time_left+1],
+    [15,yellow_time_left,10+yellow_time_left+1]]
 g_defuzzy_timeLeft_max=[20,20,20,20]# thoi gian max cac den Xanh theo defuzzy
 state = [0, 2, 0, 2]# trang thai bat dau cac den
 timeLeft = [g_timeLeft_max[0][0],g_timeLeft_max[1][2],g_timeLeft_max[2][0],g_timeLeft_max[3][2]]# thoi gian con lai cua cac den 
-############################# defuzzy_timeleft function #############################
-def reset_defuzzy_timeleft_max():
-    global g_defuzzy_timeLeft_max
-    g_defuzzy_timeLeft_max=[10,10,10,10]
 
-def update_timeLeft_max():
-    global g_timeLeft_max,g_defuzzy_timeLeft_max
-    for i in range(2):
-        g_defuzzy_timeLeft_max[i] =  max(g_defuzzy_timeLeft_max[i],g_defuzzy_timeLeft_max[i+2])
-        g_defuzzy_timeLeft_max[i] =  max(g_defuzzy_timeLeft_max[i],g_defuzzy_timeLeft_max[i+2])
-    g_timeLeft_max = [#thoi gian max cac den
-    [g_defuzzy_timeLeft_max[0],3,g_defuzzy_timeLeft_max[1]+4],
-    [g_defuzzy_timeLeft_max[1],3,g_defuzzy_timeLeft_max[0]+4],
-    [g_defuzzy_timeLeft_max[0],3,g_defuzzy_timeLeft_max[1]+4],
-    [g_defuzzy_timeLeft_max[1],3,g_defuzzy_timeLeft_max[0]+4]]
 ############################# Detect and defuzzy function #############################
 def convert_to_real_world_coordinates(point, H):
     point = np.array([point[0], point[1], 1.0], dtype="float64")
@@ -209,33 +206,136 @@ def update_display():
             units = timeLeft[i*2+j] % 10
             shift_out(~BCD[units],GPIO_PIN[i])
             shift_out(~BCD[tens],GPIO_PIN[i])
-
+            
+############################# timeleft function #############################
+def update_timeLeft_max():
+    global g_timeLeft_max,g_defuzzy_timeLeft_max
+    for i in range(2):
+        g_defuzzy_timeLeft_max[i] =  max(g_defuzzy_timeLeft_max[i],g_defuzzy_timeLeft_max[i+2])
+    g_timeLeft_max = [
+        [g_defuzzy_timeLeft_max[0],yellow_time_left,g_defuzzy_timeLeft_max[1]+yellow_time_left+1],
+        [g_defuzzy_timeLeft_max[1],yellow_time_left,g_defuzzy_timeLeft_max[0]+yellow_time_left+1],
+        [g_defuzzy_timeLeft_max[0],yellow_time_left,g_defuzzy_timeLeft_max[1]+yellow_time_left+1],
+        [g_defuzzy_timeLeft_max[1],yellow_time_left,g_defuzzy_timeLeft_max[0]+yellow_time_left+1],
+    ]
+    
 def update_timers():
     global timeLeft, state
-    print('-'.join([f'Den{i+1}:{timeLeft[i]}s {"Xanh" if state[i] == 0 else "Do" if state[i] == 2 else "Vang"}' for i in range(4)]))
+    if(timeLeft[0] == 0 and timeLeft[1] == 0 and timeLeft[2] == 0 and timeLeft[3] == 0):
+        update_timeLeft_max()
     for i in range(4):
         timeLeft[i] -= 1
         if timeLeft[i] < 0:
             state[i] = (state[i]+1)% 3
             timeLeft[i] = g_timeLeft_max[i][state[i]]
-            if(state[i] == 0 and i >= 2):
-                update_timeLeft_max()
+    print(' '.join([f'Den{i+1}:{"Xanh" if state[i] == 0 else "Do" if state[i] == 2 else "Vang"}:{timeLeft[i]}s' for i in range(4)]))
 
 def controlTrafficLight():
     global check_stop_program
     setup()
     try:
         while check_stop_program == False:
-            update_display()
+            if data_int == 0 and timeLeft[0] > 5 and timeLeft[1] > 5:
+                print("Decerease data received = 0")
+                for i in range(4):
+                    timeLeft[i] = min(5, timeLeft[i])  # Decrease red light timer
+            elif data_int == 1 and (state[0] == 0 or state[1]==0):
+                print("Incerease data received = 1")# Increase green light timer (logic depends on your notify script)
+                for i in range(4):
+                    timeLeft[i] = min(99, timeLeft[i] + 10)
             update_timers()
-            time.sleep(1)
+            update_display()
+            time.sleep(0.3)
     except KeyboardInterrupt:
         GPIO.cleanup()
         check_stop_program = True
         pass
 ##################################################################################
+class MyDelegate(btle.DefaultDelegate):
+    def __init__(self):
+        btle.DefaultDelegate.__init__(self)
+
+    def handleNotification(self, cHandle, data):
+        global data_int
+        data_int = int.from_bytes(data, byteorder='little', signed=False)
+        print(f"Notification received: {data_int}")
+
+def BLEDeviceThread(addr,name):
+    global addr_devices_in_processes
+    global addr_select_devices
+    global stop_BLEDeviceThread
+    addr_devices_in_processes.append(addr)
+    try:
+        peripheral = btle.Peripheral(addr)
+        print(f"Connected to device {name} | {addr}")
+        peripheral.setDelegate(MyDelegate())
+        service_uuid = btle.UUID("12345678-1234-1234-1234-123456789123")
+        characteristic_uuid = btle.UUID("12345678-1234-1234-1234-123456789012")
+        service = peripheral.getServiceByUUID(service_uuid)
+        characteristic = service.getCharacteristics(characteristic_uuid)[0]
+        peripheral.writeCharacteristic(characteristic.valHandle + 1, b'\x01\x00', withResponse=True)
+        while addr in addr_select_devices:
+            if stop_BLEDeviceThread == True:
+                break
+            else:
+                if peripheral.waitForNotifications(1.5):
+                    pass
+    except btle.BTLEDisconnectError:
+        print(f"BTLEDisconnectError to Device {name} | {addr}")
+
+    except Exception as e:
+        print(f"Cant to Device {name} | {addr}")  
+        #print(f"An error occurred: {e}")
+    finally:
+        addr_devices_in_processes.remove(addr)
+        try:
+            peripheral.disconnect()
+            return 
+        except:
+            pass
+
+def get_select_devices():
+    try:
+        with open(ble_devices_path, 'r') as f:
+            devices = json.load(f)
+        return devices
+    except FileNotFoundError:
+        print("File 'ble_devices.json' not found. Exiting.")
+        return []
+    except json.JSONDecodeError:
+        print("Error decoding JSON from 'ble_devices.json'. Exiting.")
+        return []
+
+def scan_ble_devices():
+    global addr_scanned_devices
+    scanner = Scanner().withDelegate(MyDelegate())
+    devices = scanner.scan(0.5)
+    addr_scanned_devices = [dev.addr for dev in devices]
+
+
 if __name__ == "__main__":
     detect_thread = threading.Thread(target=detect)
     detect_thread.start()
     controlTrafficLight_thread = threading.Thread(target=controlTrafficLight)
     controlTrafficLight_thread.start()
+    addr_select_devices = []
+    while True:
+        print(f"Stop Device For Scanning")
+        stop_BLEDeviceThread = True
+        time.sleep(2)
+        scanthread = threading.Thread(target=scan_ble_devices)
+        scanthread.start()
+        scanthread.join()
+        print(addr_scanned_devices)
+        time.sleep(0.1)
+        stop_BLEDeviceThread = False
+        select_devices = get_select_devices()
+        addr_select_devices = [addr for addr, name in select_devices]
+        for select_address, name in select_devices:
+            if select_address in addr_scanned_devices:
+                if select_address not in addr_devices_in_processes:
+                    thread = threading.Thread(target=BLEDeviceThread, args = (select_address,name,))
+                    thread.start()
+                    time.sleep(0.1)
+        time.sleep(30)
+
